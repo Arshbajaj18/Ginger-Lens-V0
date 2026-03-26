@@ -1,3 +1,2 @@
-# Welcome to your Lovable project
+# Welcome to Ginger Lens V0
 
-TODO: Document your project here
