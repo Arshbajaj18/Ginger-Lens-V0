@@ -1,9 +1,9 @@
 import { Employee } from '@/data/employees';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar, Clock, GraduationCap, Hash, Mail, MapPin } from 'lucide-react';
+import { format, parseISO, isValid } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
-import { motion } from 'framer-motion';
-import { Award, BookOpen, Calendar, GraduationCap, Hotel, Mail, MapPin, Phone, Star, User, Wrench } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Star, BookOpen, Wrench } from 'lucide-react';
 
 interface Props {
   employee: Employee | null;
@@ -11,161 +11,183 @@ interface Props {
   onClose: () => void;
 }
 
+function formatDateLong(value: string): string {
+  if (!value) return '—';
+  try {
+    const d = parseISO(value);
+    if (isValid(d)) return format(d, 'dd MMM yyyy');
+    const d2 = new Date(value);
+    if (!Number.isNaN(d2.getTime())) return format(d2, 'dd MMM yyyy');
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function experienceInCurrentRole(roleStart: string): string {
+  if (!roleStart?.trim()) return '—';
+  let start: Date | null = null;
+  try {
+    const d = parseISO(roleStart);
+    if (isValid(d)) start = d;
+    else {
+      const d2 = new Date(roleStart.trim());
+      if (!Number.isNaN(d2.getTime())) start = d2;
+    }
+  } catch {
+    return '—';
+  }
+  if (!start) return '—';
+  const years = (Date.now() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  const y = Math.max(0, Math.round(years * 10) / 10);
+  return `${y} yrs`;
+}
+
+function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+      <span className="text-primary shrink-0 mt-0.5">{icon}</span>
+      <span className="min-w-0 leading-snug">{children}</span>
+    </div>
+  );
+}
+
 export default function EmployeeDetail({ employee, open, onClose }: Props) {
   if (!employee) return null;
 
-  const avgTraining = employee.trainings.length > 0
-    ? Math.round(employee.trainings.reduce((s, t) => s + t.score, 0) / employee.trainings.length)
-    : 0;
+  const expRole = experienceInCurrentRole(employee.dateAssumingCurrentRole);
 
-  const educationWeight: Record<string, number> = {
-    '10th Pass': 15, '12th Pass': 25, 'ITI / Diploma': 40,
-    'Graduate': 55, 'Hotel Management Diploma': 65, 'Postgraduate': 80, 'MBA': 100,
-  };
+  const education = clamp100(employee.educationScore);
+  const experience = clamp100(employee.experienceScore);
+  const training = clamp100(employee.trainingScore);
+  const skill = clamp100(employee.skillScore);
 
-  const expNorm = Math.min(employee.experience / 25, 1) * 100;
-  const eduNorm = educationWeight[employee.education] || 50;
-  const skillNorm = Math.min(employee.skills.length / 8, 1) * 100;
+  // Matches the original app logic weights: skills/training contribution blended.
+  const skillsAndTrainings = Math.round(skill * 0.4 + training * 0.6);
+  const performanceReview = clamp100(employee.performanceReview);
 
-  const scoreBreakdown = [
-    { label: 'Education', value: eduNorm, weight: '30%', icon: <GraduationCap className="h-4 w-4 text-primary" /> },
-    { label: 'Experience', value: Math.round(expNorm), weight: '30%', icon: <Calendar className="h-4 w-4 text-primary" /> },
-    { label: 'Skills & Trainings', value: Math.round(skillNorm * 0.4 + avgTraining * 0.6), weight: '20%', icon: <Wrench className="h-4 w-4 text-primary" /> },
-    { label: 'Performance Review', value: employee.performanceReview, weight: '20%', icon: <Star className="h-4 w-4 text-primary" /> },
+  const scoreRows = [
+    { label: 'Education', weight: '30%', value: education, icon: <GraduationCap className="h-4 w-4 text-primary" /> },
+    { label: 'Experience', weight: '30%', value: experience, icon: <Calendar className="h-4 w-4 text-primary" /> },
+    {
+      label: 'Skills & Trainings',
+      weight: '20%',
+      value: clamp100(skillsAndTrainings),
+      icon: <Wrench className="h-4 w-4 text-primary" />,
+    },
+    { label: 'Performance Review', weight: '20%', value: performanceReview, icon: <Star className="h-4 w-4 text-primary" /> },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto p-0">
-        {/* Header */}
-        <div className="p-4 sm:p-6 pb-4 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10" style={{ background: 'var(--gradient-warm)' }} />
-          <div className="relative flex items-start gap-4">
+      <DialogContent className="max-w-[95vw] sm:max-w-md p-0 gap-0 max-h-[85vh] overflow-y-auto sm:rounded-xl">
+        <div className="relative px-5 pt-5 pb-4 overflow-hidden border-b border-border/40">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-orange-100/90 via-rose-50/80 to-background dark:from-orange-950/40 dark:via-rose-950/20 dark:to-background" />
+          <div className="relative flex gap-4">
             <img
               src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.photoSeed}`}
-              alt={employee.name}
-              className="h-16 w-16 rounded-full bg-muted border-2 border-primary/20"
+              alt=""
+              className="h-16 w-16 rounded-full bg-card border-2 border-primary/25 shrink-0"
             />
-            <div className="flex-1 min-w-0">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-foreground">{employee.name}</DialogTitle>
-                <p className="text-sm text-primary font-medium">{employee.designation}</p>
-                <p className="text-xs text-muted-foreground">{employee.department} · Age {employee.age}</p>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <DialogHeader className="space-y-1 text-left">
+                <DialogTitle className="text-xl font-bold text-foreground tracking-tight">{employee.name}</DialogTitle>
+                <p className="text-sm font-medium text-primary">{employee.position || '—'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {employee.businessUnit || '—'} · Age {employee.age > 0 ? employee.age : '—'}
+                </p>
               </DialogHeader>
             </div>
           </div>
         </div>
 
-        <div className="px-4 sm:px-6 pb-6 space-y-5">
-          {/* Contact & hotel info */}
-          <div className="grid grid-cols-1 gap-2 text-sm">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Hotel className="h-3.5 w-3.5 text-primary" />
-              <span>{employee.hotel}, {employee.hotelCity}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Mail className="h-3.5 w-3.5 text-primary" />
-              <span>{employee.email}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Phone className="h-3.5 w-3.5 text-primary" />
-              <span>{employee.phone}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5 text-primary" />
-              <span>Joined {format(parseISO(employee.joinDate), 'dd MMM yyyy')} · {employee.experience} yrs experience</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <GraduationCap className="h-3.5 w-3.5 text-primary" />
-              <span>{employee.education} — {employee.college}</span>
-            </div>
-          </div>
+        <div className="px-5 py-5 space-y-4 bg-card">
+          <InfoRow icon={<Hash className="h-4 w-4" />}>{employee.employeeNo || '—'}</InfoRow>
+          <InfoRow icon={<Mail className="h-4 w-4" />}>{employee.email || '—'}</InfoRow>
+          <InfoRow icon={<GraduationCap className="h-4 w-4" />}>{employee.highestEducation || '—'}</InfoRow>
+          <InfoRow icon={<Clock className="h-4 w-4" />}>
+            {expRole === '—' ? '—' : `${expRole} in current role`}
+          </InfoRow>
+          <InfoRow icon={<Calendar className="h-4 w-4" />}>
+            {employee.joinDate
+              ? `Joined ${formatDateLong(employee.joinDate)} · ${employee.experience} yrs experience`
+              : '—'}
+          </InfoRow>
+          <InfoRow icon={<MapPin className="h-4 w-4" />}>{employee.area || '—'}</InfoRow>
+        </div>
 
-          {/* Final score hero */}
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="flex items-center justify-between rounded-xl p-4"
-            style={{ background: 'var(--gradient-primary)' }}
-          >
-            <span className="text-sm font-semibold text-primary-foreground">Final Score</span>
-            <span className="text-3xl font-extrabold text-primary-foreground">{employee.finalScore}</span>
-          </motion.div>
+        <div className="mx-5 mb-5 rounded-xl px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary to-primary/85 text-primary-foreground shadow-sm">
+          <span className="text-sm font-semibold">Final Score</span>
+          <span className="text-3xl font-extrabold tabular-nums leading-none">{employee.finalScore}</span>
+        </div>
 
-          {/* Score breakdown */}
-          <div>
-            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-primary" /> Score Breakdown
+        <div className="px-5 pb-6 space-y-5">
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Star className="h-4 w-4 text-primary" /> Score Breakdown
             </h4>
+
             <div className="space-y-3">
-              {scoreBreakdown.map(m => (
-                <div key={m.label} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-muted/30">
-                  {m.icon}
-                  <span className="text-muted-foreground flex-1">{m.label}</span>
-                  <span className="text-xs text-muted-foreground w-8">{m.weight}</span>
-                  <Progress value={m.value} className="w-20 h-1.5" />
-                  <span className={`w-8 text-right font-semibold ${m.value >= 75 ? 'text-success' : m.value >= 50 ? 'text-foreground' : 'text-destructive'}`}>{m.value}</span>
+              {scoreRows.map((r) => (
+                <div key={r.label} className="flex items-center gap-3">
+                  <span className="text-primary">{r.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground truncate">{r.label}</span>
+                      <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">{r.weight}</span>
+                    </div>
+                    <Progress value={r.value} className="mt-1 h-1.5" />
+                  </div>
+                  <span className="w-10 text-right font-semibold tabular-nums">{r.value}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Skills */}
-          {employee.skills.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                <Wrench className="h-4 w-4 text-primary" /> Skills
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {employee.skills.map(skill => (
-                  <span key={skill} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{skill}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Achievements */}
-          {employee.achievements.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                <Award className="h-4 w-4 text-primary" /> Achievements
-              </h4>
-              <div className="space-y-1.5">
-                {employee.achievements.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm p-2 rounded-lg bg-muted/30">
-                    <Star className="h-3.5 w-3.5 text-gold" />
-                    <span className="text-foreground flex-1">{a.title}</span>
-                    <span className="text-xs text-muted-foreground">{a.year}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Training details */}
           <div>
-            <h4 className="text-sm font-semibold text-foreground mb-3">Training Details</h4>
-            <div className="space-y-2">
-              {employee.trainings.map((t, idx) => (
-                <motion.div
-                  key={t.name}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.03, duration: 0.2 }}
-                  className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <span className="text-muted-foreground truncate mr-3">{t.name}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Progress value={t.score} className="w-20 h-1.5" />
-                    <span className={`w-8 text-right font-semibold ${t.score >= 75 ? 'text-success' : t.score >= 50 ? 'text-foreground' : 'text-destructive'}`}>{t.score}</span>
+            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-primary" /> Skills
+            </h4>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {employee.skills.length > 0 ? (
+                employee.skills.map((s) => (
+                  <span key={s} className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
+                    {s}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-primary" /> Training Details
+            </h4>
+            <div className="space-y-3 mt-3">
+              {employee.trainings.length > 0 ? (
+                employee.trainings.map((t, idx) => (
+                  <div key={`${t.name}-${idx}`} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground truncate">{t.name}</span>
+                    <div className="flex-1">
+                      <Progress value={clamp100(t.score)} className="h-1.5" />
+                    </div>
+                    <span className="w-10 text-right font-semibold tabular-nums text-sm">{Math.round(t.score)}</span>
                   </div>
-                </motion.div>
-              ))}
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">No trainings listed.</p>
+              )}
             </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+function clamp100(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(100, Math.round(v)));
 }

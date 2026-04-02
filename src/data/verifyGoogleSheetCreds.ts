@@ -1,4 +1,4 @@
-const SHEET_ID = '151TRaox4bkal5-EpdFtiN1B-wg-QtK4iln7Ndm0xdlI';
+const SHEET_ID = '1cI0GAXoiaZmg-6q11Z1zqWTw2BUKba4OypQ1EFGJlx8';
 const CREDS_SHEET_NAME = 'Creds';
 
 type CsvRow = Record<string, string>;
@@ -78,7 +78,7 @@ async function fetchCredsCsvFromSheetName(sheetName: string): Promise<string> {
     sheetName,
   )}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load sheet CSV (${res.status})`);
+  if (!res.ok) throw new Error('Sign-in verification is temporarily unavailable. Please try again.');
   return res.text();
 }
 

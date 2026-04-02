@@ -9,7 +9,7 @@ import { LayoutDashboard, Users, Trophy, BarChart3, RefreshCw, LogOut, UserRound
 import { motion, AnimatePresence } from 'framer-motion';
 import gingerLogo from '@/assets/ginger-logo.png';
 import { Button } from '@/components/ui/button';
-import { employees as demoEmployees } from '@/data/employees';
+import { employees as emptyEmployees } from '@/data/employees';
 import { syncEmployeesFromGoogleSheet } from '@/data/syncGoogleSheet';
 import { toast } from 'sonner';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,7 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 export default function Index() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [employees, setEmployees] = useState(demoEmployees);
+  const [employees, setEmployees] = useState(emptyEmployees);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
@@ -33,10 +33,10 @@ export default function Index() {
       setEmployees(result.mergedEmployees);
       const now = new Date();
       setLastSyncedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      toast.success(`Synced ${result.syncedRows} rows from Google Sheet.`);
+      toast.success('Employee data updated.');
       if (setAutoFlag) sessionStorage.setItem(AUTO_SYNC_SESSION_KEY, '1');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to sync sheet data';
+      const message = error instanceof Error ? error.message : 'Could not update employee data.';
       toast.error(message);
     } finally {
       setIsSyncing(false);
@@ -49,7 +49,7 @@ export default function Index() {
     if (!authed || alreadySynced) return;
 
     // Auto-sync once after login.
-    void handleSync(demoEmployees, true);
+    void handleSync(emptyEmployees, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
