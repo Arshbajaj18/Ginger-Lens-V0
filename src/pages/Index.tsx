@@ -1,38 +1,64 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardStats from '@/components/DashboardStats';
 import EmployeeTable from '@/components/EmployeeTable';
 import Leaderboard from '@/components/Leaderboard';
 import ScoreDistribution from '@/components/ScoreDistribution';
-import { LayoutDashboard, Users, Trophy, BarChart3, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, BarChart3, RefreshCw, LogOut, UserRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gingerLogo from '@/assets/ginger-logo.png';
 import { Button } from '@/components/ui/button';
 import { employees as demoEmployees } from '@/data/employees';
 import { syncEmployeesFromGoogleSheet } from '@/data/syncGoogleSheet';
 import { toast } from 'sonner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 export default function Index() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [employees, setEmployees] = useState(demoEmployees);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  const handleSync = async () => {
+  const AUTH_USER_KEY = 'ginger_auth_user';
+  const AUTO_SYNC_SESSION_KEY = 'ginger_autosynced_v1';
+  const [username, setUsername] = useState<string>(() => sessionStorage.getItem(AUTH_USER_KEY) ?? 'User');
+
+  const handleSync = async (sourceEmployees = employees, setAutoFlag = false) => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const result = await syncEmployeesFromGoogleSheet(employees);
+      const result = await syncEmployeesFromGoogleSheet(sourceEmployees);
       setEmployees(result.mergedEmployees);
       const now = new Date();
       setLastSyncedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       toast.success(`Synced ${result.syncedRows} rows from Google Sheet.`);
+      if (setAutoFlag) sessionStorage.setItem(AUTO_SYNC_SESSION_KEY, '1');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to sync sheet data';
       toast.error(message);
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  useEffect(() => {
+    const authed = !!sessionStorage.getItem(AUTH_USER_KEY);
+    const alreadySynced = sessionStorage.getItem(AUTO_SYNC_SESSION_KEY) === '1';
+    if (!authed || alreadySynced) return;
+
+    // Auto-sync once after login.
+    void handleSync(demoEmployees, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(AUTH_USER_KEY);
+    sessionStorage.removeItem(AUTO_SYNC_SESSION_KEY);
+    window.dispatchEvent(new Event('ginger_auth_update'));
+    toast.success('Logged out.');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -47,18 +73,44 @@ export default function Index() {
               Employee Performance Dashboard
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block text-[11px] text-muted-foreground leading-none">
+              <span className="font-medium uppercase tracking-wide">Last Synced:</span> {lastSyncedAt ?? '—'}
+            </div>
+
+            <div className="text-[11px] text-muted-foreground leading-none sm:hidden">
+              Last Synced: {lastSyncedAt ?? '—'}
+            </div>
+
             <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing} className="h-8">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
               <span className="ml-1">{isSyncing ? 'Syncing...' : 'Sync Data'}</span>
             </Button>
-            {lastSyncedAt && (
-              <span className="hidden sm:inline text-xs text-muted-foreground">
-                Synced {lastSyncedAt}
-              </span>
-            )}
-            <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs text-muted-foreground">Live Data</span>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-xs hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  aria-label="User menu"
+                >
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-success" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel className="text-xs">{username}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleLogout} className="text-xs text-destructive focus:text-destructive">
+                  <span className="inline-flex items-center gap-2">
+                    <LogOut className="h-3.5 w-3.5" />
+                    Logout
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

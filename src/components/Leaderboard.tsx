@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { allDesignations, Employee } from '@/data/employees';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { Crown, Medal, MapPin } from 'lucide-react';
 import { motion } from 'framer-motion';
 import EmployeeDetail from './EmployeeDetail';
@@ -13,11 +14,23 @@ interface LeaderboardProps {
 export default function Leaderboard({ employees }: LeaderboardProps) {
   const [designation, setDesignation] = useState<string>(allDesignations[4]);
   const [selected, setSelected] = useState<Employee | null>(null);
+  const [page, setPage] = useState(1);
 
   const ranked = useMemo(() =>
     employees.filter(e => e.designation === designation).sort((a, b) => b.finalScore - a.finalScore),
     [designation]
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [designation]);
+
+  const pageSize = 50;
+  const topCount = 3;
+  const rest = ranked.slice(topCount);
+  const totalPages = Math.max(1, Math.ceil(rest.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRest = rest.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div className="space-y-6">
@@ -37,12 +50,12 @@ export default function Leaderboard({ employees }: LeaderboardProps) {
         <div className="flex items-end justify-center gap-3 sm:gap-6 py-4">
           <PodiumCard emp={ranked[1]} rank={2} height="h-36" onClick={() => setSelected(ranked[1])} />
           <PodiumCard emp={ranked[0]} rank={1} height="h-44" onClick={() => setSelected(ranked[0])} />
-          <PodiumCard emp={ranked[2]} rank={3} height="h-32" onClick={() => setSelected(ranked[2])} />
+          <PodiumCard emp={ranked[2]} rank={3} height="h-36" onClick={() => setSelected(ranked[2])} />
         </div>
       )}
 
       <div className="space-y-2">
-        {ranked.slice(3).map((emp, idx) => (
+        {pagedRest.map((emp, idx) => (
           <motion.div
             key={emp.id}
             initial={{ opacity: 0, x: -10 }}
@@ -51,7 +64,7 @@ export default function Leaderboard({ employees }: LeaderboardProps) {
             className="glass-card rounded-xl p-3 flex items-center gap-4 cursor-pointer hover:scale-[1.01] transition-all"
             onClick={() => setSelected(emp)}
           >
-            <span className="w-8 text-center text-sm font-bold text-muted-foreground">#{idx + 4}</span>
+            <span className="w-8 text-center text-sm font-bold text-muted-foreground">#{4 + (safePage - 1) * pageSize + idx}</span>
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.photoSeed}`} alt={emp.name} className="h-8 w-8 rounded-full bg-muted" />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground text-sm truncate">{emp.name}</p>
@@ -64,6 +77,22 @@ export default function Leaderboard({ employees }: LeaderboardProps) {
           </motion.div>
         ))}
       </div>
+
+      {rest.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <span className="text-xs text-muted-foreground">
+            Page <span className="font-medium text-foreground">{safePage}</span> of <span className="font-medium text-foreground">{totalPages}</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
+              Previous
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <EmployeeDetail employee={selected} open={!!selected} onClose={() => setSelected(null)} />
     </div>
@@ -84,11 +113,11 @@ function PodiumCard({ emp, rank, height, onClick }: { emp: Employee; rank: numbe
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: rank * 0.1, duration: 0.4 }}
       onClick={onClick}
-      className={`flex flex-col items-center justify-end ${height} w-28 sm:w-36 rounded-xl bg-gradient-to-b ${s.gradient} border cursor-pointer hover:scale-105 transition-transform p-2 sm:p-3`}
+      className={`flex flex-col items-center justify-center ${height} w-28 sm:w-36 rounded-xl bg-gradient-to-b ${s.gradient} border cursor-pointer hover:scale-105 transition-transform p-2 sm:p-3`}
     >
       {s.icon}
-      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.photoSeed}`} alt={emp.name} className="h-10 w-10 rounded-full bg-muted mt-1" />
-      <p className="text-[10px] sm:text-xs font-semibold text-foreground mt-1 text-center line-clamp-2 leading-tight w-full">{emp.name}</p>
+      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${emp.photoSeed}`} alt={emp.name} className="h-10 w-10 rounded-full bg-muted" />
+      <p className="text-[10px] sm:text-xs font-semibold text-foreground text-center line-clamp-2 leading-tight w-full">{emp.name}</p>
       <p className="text-lg font-bold text-foreground">{emp.finalScore}</p>
     </motion.div>
   );

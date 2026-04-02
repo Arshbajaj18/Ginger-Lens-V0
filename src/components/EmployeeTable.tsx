@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { allDesignations, allDepartments, Employee } from '@/data/employees';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,6 +21,7 @@ export default function EmployeeTable({ employees }: EmployeeTableProps) {
   const [sortAsc, setSortAsc] = useState(false);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [view, setView] = useState<'table' | 'card'>('card');
+  const [page, setPage] = useState(1);
 
   const effectiveView = isMobile ? 'card' : view;
 
@@ -31,6 +32,19 @@ export default function EmployeeTable({ employees }: EmployeeTableProps) {
     if (search) result = result.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.hotel.toLowerCase().includes(search.toLowerCase()));
     return [...result].sort((a, b) => sortAsc ? a.finalScore - b.finalScore : b.finalScore - a.finalScore);
   }, [desigFilter, deptFilter, search, sortAsc]);
+
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedEmployees = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [desigFilter, deptFilter, search, sortAsc, effectiveView]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   return (
     <div className="space-y-4">
@@ -89,7 +103,7 @@ export default function EmployeeTable({ employees }: EmployeeTableProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.slice(0, 100).map((emp, idx) => (
+                    {pagedEmployees.map((emp, idx) => (
                       <motion.tr
                         key={emp.id}
                         initial={{ opacity: 0, x: -10 }}
@@ -135,20 +149,30 @@ export default function EmployeeTable({ employees }: EmployeeTableProps) {
                   </tbody>
                 </table>
               </div>
-              {filtered.length > 100 && (
-                <div className="text-center py-3 text-xs text-muted-foreground border-t border-border">
-                  Showing first 100 of {filtered.length} results. Use filters to narrow down.
-                </div>
-              )}
               {filtered.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">No employees found.</div>
+              )}
+              {filtered.length > 0 && totalPages > 1 && (
+                <div className="border-t border-border px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Page <span className="font-medium text-foreground">{safePage}</span> of <span className="font-medium text-foreground">{totalPages}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
+                      Previous
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </motion.div>
         ) : (
           <motion.div key="cards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filtered.slice(0, 60).map((emp, idx) => (
+              {pagedEmployees.map((emp, idx) => (
                 <motion.div
                   key={emp.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -179,10 +203,23 @@ export default function EmployeeTable({ employees }: EmployeeTableProps) {
                 </motion.div>
               ))}
             </div>
-            {filtered.length > 60 && (
-              <div className="text-center py-4 text-xs text-muted-foreground">
-                Showing 60 of {filtered.length} results. Use filters to narrow down.
+            {filtered.length > 0 && totalPages > 1 && (
+              <div className="mt-4 border-t border-border pt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Page <span className="font-medium text-foreground">{safePage}</span> of <span className="font-medium text-foreground">{totalPages}</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}>
+                    Previous
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>
+                    Next
+                  </Button>
+                </div>
               </div>
+            )}
+            {filtered.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">No employees found.</div>
             )}
           </motion.div>
         )}
