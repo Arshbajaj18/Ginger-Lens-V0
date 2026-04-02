@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { EyeOff, Lock, User } from 'lucide-react';
 
 const AUTH_USER_KEY = 'ginger_auth_user';
-const AUTO_SYNC_SESSION_KEY = 'ginger_autosynced_v1';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -44,7 +43,6 @@ export default function Login() {
       }
 
       sessionStorage.setItem(AUTH_USER_KEY, u);
-      sessionStorage.removeItem(AUTO_SYNC_SESSION_KEY);
       // Notify the router guard in App.tsx to re-evaluate auth state.
       window.dispatchEvent(new Event('ginger_auth_update'));
       toast.success('Login successful.');

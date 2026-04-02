@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listDesignations, Employee } from '@/data/employees';
+import { listDesignationsByHeadcount, Employee } from '@/data/employees';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -9,10 +9,12 @@ import EmployeeDetail from './EmployeeDetail';
 
 interface LeaderboardProps {
   employees: Employee[];
+  /** When set (nonce changes), selects this position in the dropdown if it exists. */
+  jumpToPosition?: { position: string; nonce: number };
 }
 
-export default function Leaderboard({ employees }: LeaderboardProps) {
-  const designations = useMemo(() => listDesignations(employees), [employees]);
+export default function Leaderboard({ employees, jumpToPosition }: LeaderboardProps) {
+  const designations = useMemo(() => listDesignationsByHeadcount(employees), [employees]);
   const [designation, setDesignation] = useState<string>('');
   const [selected, setSelected] = useState<Employee | null>(null);
   const [page, setPage] = useState(1);
@@ -28,6 +30,12 @@ export default function Leaderboard({ employees }: LeaderboardProps) {
   useEffect(() => {
     setPage(1);
   }, [activeDesignation]);
+
+  useEffect(() => {
+    if (!jumpToPosition) return;
+    const { position } = jumpToPosition;
+    if (designations.includes(position)) setDesignation(position);
+  }, [jumpToPosition?.nonce, jumpToPosition?.position, designations]);
 
   const pageSize = 50;
   const shownTop = Math.min(3, ranked.length);

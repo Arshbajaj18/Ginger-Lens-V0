@@ -5,11 +5,11 @@ import DashboardStats from '@/components/DashboardStats';
 import EmployeeTable from '@/components/EmployeeTable';
 import Leaderboard from '@/components/Leaderboard';
 import ScoreDistribution from '@/components/ScoreDistribution';
-import { LayoutDashboard, Users, Trophy, BarChart3, RefreshCw, LogOut, UserRound } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, BarChart3, RefreshCw, LogOut, UserRound, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gingerLogo from '@/assets/ginger-logo.png';
 import { Button } from '@/components/ui/button';
-import { employees as emptyEmployees } from '@/data/employees';
+import type { Employee } from '@/data/employees';
 import { syncEmployeesFromGoogleSheet } from '@/data/syncGoogleSheet';
 import { toast } from 'sonner';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,24 +17,29 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 export default function Index() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [employees, setEmployees] = useState(emptyEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const AUTH_USER_KEY = 'ginger_auth_user';
-  const AUTO_SYNC_SESSION_KEY = 'ginger_autosynced_v1';
   const [username, setUsername] = useState<string>(() => sessionStorage.getItem(AUTH_USER_KEY) ?? 'User');
+  const [leaderboardJump, setLeaderboardJump] = useState<{ position: string; nonce: number } | undefined>(undefined);
 
-  const handleSync = async (sourceEmployees = employees, setAutoFlag = false) => {
+  const openLeaderboardForPosition = (position: string) => {
+    setLeaderboardJump({ position, nonce: Date.now() });
+    setActiveTab('leaderboard');
+  };
+
+  const handleSync = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      const result = await syncEmployeesFromGoogleSheet(sourceEmployees);
+      const result = await syncEmployeesFromGoogleSheet([]);
       setEmployees(result.mergedEmployees);
       const now = new Date();
       setLastSyncedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       toast.success('Employee data updated.');
-      if (setAutoFlag) sessionStorage.setItem(AUTO_SYNC_SESSION_KEY, '1');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not update employee data.';
       toast.error(message);
@@ -44,25 +49,48 @@ export default function Index() {
   };
 
   useEffect(() => {
-    const authed = !!sessionStorage.getItem(AUTH_USER_KEY);
-    const alreadySynced = sessionStorage.getItem(AUTO_SYNC_SESSION_KEY) === '1';
-    if (!authed || alreadySynced) return;
-
-    // Auto-sync once after login.
-    void handleSync(emptyEmployees, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    (async () => {
+      setIsBootstrapping(true);
+      try {
+        const result = await syncEmployeesFromGoogleSheet([]);
+        if (cancelled) return;
+        setEmployees(result.mergedEmployees);
+        const now = new Date();
+        setLastSyncedAt(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : 'Could not update employee data.';
+          toast.error(message);
+        }
+      } finally {
+        if (!cancelled) setIsBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem(AUTH_USER_KEY);
-    sessionStorage.removeItem(AUTO_SYNC_SESSION_KEY);
     window.dispatchEvent(new Event('ginger_auth_update'));
     toast.success('Logged out.');
     navigate('/login', { replace: true });
   };
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background overflow-x-hidden relative">
+      {isBootstrapping && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-background/95 backdrop-blur-sm">
+          <img src={gingerLogo} alt="" className="h-12 object-contain opacity-90" />
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 text-primary animate-spin" aria-hidden />
+            <p className="text-sm text-muted-foreground font-medium">Loading your workspace…</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-40 backdrop-blur-md bg-card/90">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -82,7 +110,7 @@ export default function Index() {
               Last Synced: {lastSyncedAt ?? '—'}
             </div>
 
-            <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing} className="h-8">
+            <Button variant="outline" size="sm" onClick={() => void handleSync()} disabled={isSyncing || isBootstrapping} className="h-8">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
               <span className="ml-1">{isSyncing ? 'Syncing...' : 'Sync Data'}</span>
             </Button>
@@ -144,7 +172,7 @@ export default function Index() {
               transition={{ duration: 0.25, ease: 'easeOut' }}
             >
               <TabsContent value="overview" className="mt-0">
-                <DashboardStats employees={employees} />
+                <DashboardStats employees={employees} onAtGlanceOpenLeaderboard={openLeaderboardForPosition} />
               </TabsContent>
 
               <TabsContent value="employees" className="mt-0">
@@ -152,7 +180,7 @@ export default function Index() {
               </TabsContent>
 
               <TabsContent value="leaderboard" className="mt-0">
-                <Leaderboard employees={employees} />
+                <Leaderboard employees={employees} jumpToPosition={leaderboardJump} />
               </TabsContent>
 
               <TabsContent value="analytics" className="mt-0">
@@ -167,7 +195,7 @@ export default function Index() {
       <footer className="border-t border-border mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-1 text-xs text-muted-foreground text-center">
           <span>© 2026 Ginger Hotels — An IHCL Brand</span>
-          <span>Internal HR Dashboard v1.0</span>
+          <span>Ginger Internal Talent Pool</span>
         </div>
       </footer>
     </div>

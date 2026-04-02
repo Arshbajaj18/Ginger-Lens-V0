@@ -85,3 +85,16 @@ export function listEducationLevels(employeesList: Employee[]): string[] {
     a.localeCompare(b),
   );
 }
+
+/** Position titles sorted by headcount (largest first). */
+export function listDesignationsByHeadcount(employeesList: Employee[]): string[] {
+  const counts = new Map<string, number>();
+  for (const e of employeesList) {
+    const d = e.designation?.trim();
+    if (!d) continue;
+    counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([title]) => title);
+}

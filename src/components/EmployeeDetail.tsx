@@ -43,6 +43,12 @@ function experienceInCurrentRole(roleStart: string): string {
   return `${y} yrs`;
 }
 
+function formatSheetScore(v: number): string {
+  if (!Number.isFinite(v)) return '—';
+  const rounded = Math.round(v * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 function InfoRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 text-sm text-muted-foreground">
@@ -57,26 +63,27 @@ export default function EmployeeDetail({ employee, open, onClose }: Props) {
 
   const expRole = experienceInCurrentRole(employee.dateAssumingCurrentRole);
 
-  const education = clamp100(employee.educationScore);
-  const experience = clamp100(employee.experienceScore);
-  const training = clamp100(employee.trainingScore);
-  const skill = clamp100(employee.skillScore);
-
-  // Matches the original app logic weights: skills/training contribution blended.
-  const skillsAndTrainings = Math.round(skill * 0.4 + training * 0.6);
-  const performanceReview = clamp100(employee.performanceReview);
+  const education = employee.educationScore;
+  const experience = employee.experienceScore;
+  const trainings = employee.trainingScore;
+  const skills = employee.skillScore;
+  const max = Math.max(education, experience, trainings, skills, 1e-6);
+  const barPct = (v: number) => Math.max(0, Math.min(100, Math.round((v / max) * 100)));
 
   const scoreRows = [
-    { label: 'Education', weight: '30%', value: education, icon: <GraduationCap className="h-4 w-4 text-primary" /> },
-    { label: 'Experience', weight: '30%', value: experience, icon: <Calendar className="h-4 w-4 text-primary" /> },
-    {
-      label: 'Skills & Trainings',
-      weight: '20%',
-      value: clamp100(skillsAndTrainings),
-      icon: <Wrench className="h-4 w-4 text-primary" />,
-    },
-    { label: 'Performance Review', weight: '20%', value: performanceReview, icon: <Star className="h-4 w-4 text-primary" /> },
+    { label: 'Education', value: education, bar: barPct(education), icon: <GraduationCap className="h-4 w-4 text-primary" /> },
+    { label: 'Experience', value: experience, bar: barPct(experience), icon: <Calendar className="h-4 w-4 text-primary" /> },
+    { label: 'Trainings', value: trainings, bar: barPct(trainings), icon: <BookOpen className="h-4 w-4 text-primary" /> },
+    { label: 'Skills', value: skills, bar: barPct(skills), icon: <Wrench className="h-4 w-4 text-primary" /> },
   ];
+
+  const trainingNames =
+    employee.trainings.length > 0
+      ? employee.trainings.map((t) => t.name)
+      : employee.trainingsDone
+          .split(/[,;\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -118,7 +125,9 @@ export default function EmployeeDetail({ employee, open, onClose }: Props) {
 
         <div className="mx-5 mb-5 rounded-xl px-4 py-3 flex items-center justify-between bg-gradient-to-r from-primary to-primary/85 text-primary-foreground shadow-sm">
           <span className="text-sm font-semibold">Final Score</span>
-          <span className="text-3xl font-extrabold tabular-nums leading-none">{employee.finalScore}</span>
+          <span className="text-3xl font-extrabold tabular-nums leading-none">
+            {formatSheetScore(employee.overallPoints)}
+          </span>
         </div>
 
         <div className="px-5 pb-6 space-y-5">
@@ -134,11 +143,10 @@ export default function EmployeeDetail({ employee, open, onClose }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground truncate">{r.label}</span>
-                      <span className="text-xs text-muted-foreground font-medium whitespace-nowrap">{r.weight}</span>
                     </div>
-                    <Progress value={r.value} className="mt-1 h-1.5" />
+                    <Progress value={r.bar} className="mt-1 h-1.5" />
                   </div>
-                  <span className="w-10 text-right font-semibold tabular-nums">{r.value}</span>
+                  <span className="w-12 text-right font-semibold tabular-nums text-sm">{formatSheetScore(r.value)}</span>
                 </div>
               ))}
             </div>
@@ -165,29 +173,20 @@ export default function EmployeeDetail({ employee, open, onClose }: Props) {
             <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-primary" /> Training Details
             </h4>
-            <div className="space-y-3 mt-3">
-              {employee.trainings.length > 0 ? (
-                employee.trainings.map((t, idx) => (
-                  <div key={`${t.name}-${idx}`} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground truncate">{t.name}</span>
-                    <div className="flex-1">
-                      <Progress value={clamp100(t.score)} className="h-1.5" />
-                    </div>
-                    <span className="w-10 text-right font-semibold tabular-nums text-sm">{Math.round(t.score)}</span>
-                  </div>
+            <ul className="mt-3 space-y-2">
+              {trainingNames.length > 0 ? (
+                trainingNames.map((name, idx) => (
+                  <li key={`${name}-${idx}`} className="text-sm text-muted-foreground border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                    {name}
+                  </li>
                 ))
               ) : (
-                <p className="text-xs text-muted-foreground">No trainings listed.</p>
+                <li className="text-xs text-muted-foreground list-none">No trainings listed.</li>
               )}
-            </div>
+            </ul>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
-}
-
-function clamp100(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(0, Math.min(100, Math.round(v)));
 }
