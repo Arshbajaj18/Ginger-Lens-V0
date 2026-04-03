@@ -31,6 +31,12 @@ export default function Index() {
     setActiveTab('leaderboard');
   };
 
+  // Ensure a consistent "top of page" experience when switching tabs.
+  useEffect(() => {
+    // React portals can keep scroll state; enforce top on tab change.
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   const handleSync = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
